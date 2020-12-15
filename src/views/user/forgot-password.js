@@ -7,6 +7,8 @@ import { Colxx } from '../../components/common/CustomBootstrap';
 import IntlMessages from '../../helpers/IntlMessages';
 import { forgotPassword } from '../../redux/actions';
 import { NotificationManager } from '../../components/common/react-notifications';
+import axios from "axios"
+import { reset } from 'mousetrap';
 
 const validateEmail = (value) => {
   let error;
@@ -25,38 +27,120 @@ const ForgotPassword = ({
   error,
   forgotPasswordAction,
 }) => {
-  const [email] = useState('demo@coloredstrategies.com');
+  const [response, setResponse] = useState({})
+  const [formData, setformData] = useState({})
+const styles = {
+  border:{
+    border:"2px solid green"
+  }
+}
 
-  const onForgotPassword = (values) => {
-    if (!loading) {
-      if (values.email !== '') {
-        forgotPasswordAction(values, history);
+  // SEND THE OTP
+  const SendOtp = () => {
+    console.log(formData);
+    axios.post("/send-OTP", formData).then(res => {
+      console.log(res.data);
+      if (res.data.success) {
+        setResponse({ email: res.data.email, otp: res.data.otp, expiration: res.data.expiration })
+        NotificationManager.success(res.data.success, 'Password Error', 3000, null, null, '');
       }
-    }
-  };
+      else if (res.data.error) {
+        NotificationManager.warning(res.data.error, 'Password Error', 3000, null, null, '');
+      }
 
-  useEffect(() => {
-    if (error) {
-      NotificationManager.warning(
-        error,
-        'Forgot Password Error',
-        3000,
-        null,
-        null,
-        ''
-      );
-    } else if (!loading && forgotUserMail === 'success')
-      NotificationManager.success(
-        'Please check your email.',
-        'Forgot Password Success',
-        3000,
-        null,
-        null,
-        ''
-      );
-  }, [error, forgotUserMail, loading]);
+    })
+  }
+const Reset =(e)=>{
+  e.preventDefault()
+  if(!response.verified){
+    localStorage.setItem("userEmail", response.email);
+  window.location.href ="/user/reset-password"
+  }
+  else{
+    NotificationManager.warning("OTP not verified", 'OTP error', 3000, null, null, '');
+  }
+}
 
-  const initialValues = { email };
+// console.log(timenow);
+// if (response.expiration) {
+//   const exp = new Date(response.expiration)
+//   console.log(exp);
+//   if (exp.getTime() < timenow.getTime()) {
+//     console.log(true);
+//   }
+//   console.log(false);
+// }
+// RESEND THE PASSWORD
+const resend = (e) => {
+  const timenow = new Date()
+  console.log(timenow);
+  const exp = new Date(response.expiration)
+  // IF EXPIRY TIME HAS NOT CROSSED, THEN ERROR
+  if (exp.getTime() > timenow.getTime()) {
+    NotificationManager.warning(
+      "OTP is still valid ",
+      'OTP error',
+      3000,
+      null,
+      null,
+      ''
+    );
+    console.log(formData);
+  } else {
+    // ELSE, RESEND INITIATED
+    console.log(formData);
+    axios.post("/send-OTP", formData).then(res => {
+      console.log(res.data);
+      if (res.data.success) {
+        setResponse({ email: res.data.email, otp: res.data.otp, expiration: res.data.expiration })
+        NotificationManager.warning(
+          res.data.success,
+          'Success',
+          3000,
+          null,
+          null,
+          ''
+        );
+      }
+      else if (res.data.error) {
+        NotificationManager.warning(
+          res.data.error,
+          'Error',
+          3000,
+          null,
+          null,
+          ''
+        );
+      }
+
+    })
+  }
+}
+
+
+
+
+  // useEffect(() => {
+  //   if (error) {
+  //     NotificationManager.warning(
+  //       error,
+  //       'Forgot Password Error',
+  //       3000,
+  //       null,
+  //       null,
+  //       ''
+  //     );
+  //   } else if (!loading && forgotUserMail === 'success')
+  //     NotificationManager.success(
+  //       'Please check your email.',
+  //       'Forgot Password Success',
+  //       3000,
+  //       null,
+  //       null,
+  //       ''
+  //     );
+  // }, [error, forgotUserMail, loading]);
+
 
   return (
     <Row className="h-100">
@@ -81,7 +165,7 @@ const ForgotPassword = ({
               <IntlMessages id="user.forgot-password" />
             </CardTitle>
 
-            <Formik initialValues={initialValues} onSubmit={onForgotPassword}>
+            <Formik>
               {({ errors, touched }) => (
                 <Form className="av-tooltip tooltip-label-bottom">
                   <FormGroup className="form-group has-float-label">
@@ -92,23 +176,42 @@ const ForgotPassword = ({
                       className="form-control"
                       name="email"
                       validate={validateEmail}
+                      onChange={(e) => {
+                        setformData({ email: e.target.value })
+                      }}
                     />
-                    {errors.email && touched.email && (
-                      <div className="invalid-feedback d-block">
-                        {errors.email}
-                      </div>
-                    )}
+
                   </FormGroup>
+                  {response.otp ? <FormGroup className="form-group has-float-label">
+                    <Label>
+                      <IntlMessages id="OTP" />
+                    </Label>
+                    <Field
+                      className="form-control"
+                      name="Otp"
+                      validate={validateEmail}
+                      onChange={(e) => {
+                        if (e.target.value == response.otp) {
+                          setResponse({ ...response, verified: false })
+                          NotificationManager.success("OTP verified", 'Success', 3000, null, null, '');
+                        }
+                        else if (e.target.value.length == 4 && e.target.value != response.otp) {
+                          setResponse({ ...response, verified: true })
+                          NotificationManager.warning("Incorrect OTP", 'Error', 3000, null, null, '');
+
+                        }
+                      }}
+                    />
+
+                  </FormGroup> : ""}
 
                   <div className="d-flex justify-content-between align-items-center">
-                    <NavLink to="/user/forgot-password">
-                      <IntlMessages id="user.forgot-password-question" />
-                    </NavLink>
-                    <Button
+                    {response.otp ? <div style={{cursor:'pointer'}} onClick={resend}>Resend</div> : ""}
+                    {response.otp ? <Button
+                      onClick={Reset}
                       color="primary"
-                      className={`btn-shadow btn-multiple-state ${
-                        loading ? 'show-spinner' : ''
-                      }`}
+                      className={`btn-shadow btn-multiple-state ${loading ? 'show-spinner' : ''
+                        }`}
                       size="lg"
                     >
                       <span className="spinner d-inline-block">
@@ -117,9 +220,24 @@ const ForgotPassword = ({
                         <span className="bounce3" />
                       </span>
                       <span className="label">
-                        <IntlMessages id="user.reset-password-button" />
+                        Reset
                       </span>
-                    </Button>
+                    </Button> : <Button
+                      onClick={SendOtp}
+                      color="primary"
+                      className={`btn-shadow btn-multiple-state ${loading ? 'show-spinner' : ''
+                        }`}
+                      size="lg"
+                    >
+                        <span className="spinner d-inline-block">
+                          <span className="bounce1" />
+                          <span className="bounce2" />
+                          <span className="bounce3" />
+                        </span>
+                        <span className="label">
+                          Send OTP
+                      </span>
+                      </Button>}
                   </div>
                 </Form>
               )}
@@ -139,3 +257,5 @@ const mapStateToProps = ({ authUser }) => {
 export default connect(mapStateToProps, {
   forgotPasswordAction: forgotPassword,
 })(ForgotPassword);
+
+
